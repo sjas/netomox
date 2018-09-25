@@ -36,7 +36,7 @@ Or install it yourself as:
 In `vendor` dir, there are some data instances defined/handled with Netomok.
 
 * `vendor/model`: topology data instance (json) of fictional network.
-* `vendor/model_defs`: topology data definition using `Netomox::DSL` to generate json data instance. See. [DSL Document](./doc/dsl.md)
+* `vendor/model_defs`: topology data definition using `Netomox::DSL` to generate json data instance. See. [DSL Document](dsl.md)
 
 ### Demo
 Asciinema demo: generate topology data and diff old data.
