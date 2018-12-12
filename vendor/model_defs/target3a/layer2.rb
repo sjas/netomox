@@ -46,7 +46,7 @@ def register_target_layer2(nws)
         term_point 'p1' do
           attribute(trunk_vlan_ab)
         end
-        support %w[target-L1 R1]
+        support %w[target-L1.5 R1]
       end
 
       node 'R1-BR' do
@@ -61,7 +61,7 @@ def register_target_layer2(nws)
           attribute(trunk_vlan_ab)
           support %w[target-L1 R1 Fa2]
         end
-        support %w[target-L1 R1]
+        support %w[target-L1.5 R1]
       end
 
       node 'R2-GRT' do
@@ -74,7 +74,7 @@ def register_target_layer2(nws)
         term_point 'p1' do
           attribute(trunk_vlan_ab)
         end
-        support %w[target-L1 R2]
+        support %w[target-L1.5 R2]
       end
 
       node 'R2-BR' do
@@ -89,7 +89,7 @@ def register_target_layer2(nws)
           attribute(trunk_vlan_ab)
           support %w[target-L1 R2 Fa2]
         end
-        support %w[target-L1 R2]
+        support %w[target-L1.5 R2]
       end
 
       node 'SW1-BR' do
