@@ -1,7 +1,7 @@
 require 'netomox'
 
 # rubocop:disable Metrics/MethodLength, Metrics/BlockLength, Metrics/AbcSize
-def register_target_layer3a(nws)
+def register_target_layer3(nws)
   nws.register do
     network 'target-L3' do
       type Netomox::NWTYPE_L3
