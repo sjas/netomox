@@ -5,8 +5,9 @@ require 'netomox'
 require 'optparse'
 
 module Netomox
-  params = ARGV.getopts('f:', 'file:')
+  params = ARGV.getopts('df:', 'file:', 'debug')
   file = params['f'] || params['file']
+  debug = params['d'] || params['debug']
   unless file
     STDERR.puts 'file not specified'
     exit(1)
@@ -57,24 +58,79 @@ module Netomox
     end
   end
 
-  # create cola groups (by each host)
-  cola_group_by_node = {}
+  # create cola groups (by each host, term points are leaves)
+  cola_group_index = 0
+  cola_group_index_of = {}
   cola_networks[:nodes].each do |cola_node|
     # cola_node means tp
     node_path = cola_node[:name].split('/').slice(0..1).join('/')
-    unless cola_group_by_node[node_path]
-      cola_group_by_node[node_path] = []
+    unless cola_group_index_of[node_path]
+      cola_group_index_of[node_path] = {
+        index: cola_group_index,
+        leaves: []
+      }
+      cola_group_index += 1
     end
-    cola_group_by_node[node_path].push(cola_node[:index])
+    cola_group_index_of[node_path][:leaves].push(cola_node[:index])
+  end
+  if debug
+    puts '## cola group index'
+    puts JSON.pretty_generate(cola_group_index_of)
+  end
+
+  # create cola groups (by supporting node)
+  parent_nodes_of = {}
+  nws.all_nodes do |node, _nw|
+    node.supports.each do |snode|
+      snode_path = snode.ref_path
+      unless parent_nodes_of[snode_path]
+        parent_nodes_of[snode_path] = []
+      end
+      parent_nodes_of[snode_path].push node.path
+    end
+  end
+  if debug
+    puts '## cola parent node table'
+    puts JSON.pretty_generate(parent_nodes_of)
+  end
+
+  # check reference count
+  ref_count = {}
+  parent_nodes_of.each_value do |parents|
+    parents.each do |parent_path|
+      ref_count[parent_path] = 0 unless ref_count[parent_path]
+      ref_count[parent_path] += 1
+    end
+  end
+  multi_ref_nodes = ref_count.select {|_k,v| v > 1}.keys
+  if debug
+    puts '## ref_count'
+    puts JSON.pretty_generate(multi_ref_nodes)
   end
 
   # construct cola group data
-  cola_group_by_node.each_value do |leaves|
+  cola_group_index_of.each_pair do |node_path, group|
+    puts "#{node_path}, #{group}, #{parent_node_of[node_path]}" if debug
     group_data = {
-      leaves: leaves
+      index: group[:index],
+      leaves: group[:leaves]
     }
+    unless parent_nodes_of[node_path]
+      cola_networks[:groups].push group_data
+      next
+    end
+    parents = parent_nodes_of[node_path] - multi_ref_nodes
+    puts "# #{node_path}, parents:#{parent_nodes_of[node_path]} - #{multi_ref_nodes} = #{parents}" if debug
+    unless parents.empty?
+      group_data[:groups] = parents.map do |parent_path|
+        cola_group_index_of[parent_path][:index]
+      end
+    end
     cola_networks[:groups].push group_data
   end
 
+  # output json data for CoLa gridifiedSmallGroups
+  # https://github.com/tgdwyer/WebCola/blob/master/WebCola/examples/gridifiedSmallGroups.html
+  # https://github.com/tgdwyer/WebCola/blob/master/WebCola/examples/graphdata/smallgrouped.json
   puts JSON.pretty_generate(cola_networks)
 end
