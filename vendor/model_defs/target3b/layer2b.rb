@@ -18,47 +18,47 @@ def register_target_layer2b(nws)
         vlan_id_names: [vlan_c]
       }
 
-      node 'SW1-BR' do
+      node 'SW1-BR-VL30' do
         attribute(
           name: 'SW1-BR',
           descr: 'L2 bridge of SW1',
           mgmt_addrs: %w[192.168.10.1],
           mgmt_vid: 10
         )
+        term_point 'p1' do
+          attribute(trunk_vlan_c)
+          support %w[target-L1 SW1 Fa2]
+        end
         term_point 'p2' do
           attribute(trunk_vlan_c)
           support %w[target-L1 SW1 Fa0]
         end
-        term_point 'p3' do
-          attribute(trunk_vlan_c)
-          support %w[target-L1 SW1 Fa2]
-        end
         support %w[target-L1 SW1]
       end
 
-      node 'SW2-BR' do
+      node 'SW2-BR-VL30' do
         attribute(
           name: 'SW2-BR',
           descr: 'L2 bridge of SW2',
           mgmt_addrs: %w[192.168.10.2],
           mgmt_vid: 10
         )
+        term_point 'p1' do
+          attribute(trunk_vlan_c)
+          support %w[target-L1 SW2 Fa2]
+        end
         term_point 'p2' do
           attribute(trunk_vlan_c)
           support %w[target-L1 SW2 Fa0]
         end
         term_point 'p3' do
           attribute(trunk_vlan_c)
-          support %w[target-L1 SW2 Fa2]
-        end
-        term_point 'p6' do
-          attribute(trunk_vlan_c)
           support %w[target-L1 SW2 Fa4]
         end
         support %w[target-L1 SW2]
       end
 
-      node 'HYP1-vSW1-BR' do
+      node 'HYP1-vSW1-BR-VL30' do
         term_point 'p1' do
           attribute(trunk_vlan_c)
           support %w[target-L1.5 HYP1-vSW1 eth0]
@@ -67,7 +67,7 @@ def register_target_layer2b(nws)
           attribute(trunk_vlan_c)
           support %w[target-L1.5 HYP1-vSW1 eth1]
         end
-        term_point 'p5' do
+        term_point 'p3' do
           attribute(trunk_vlan_c)
           support %w[target-L1.5 HYP1-vSW1 p2]
         end
@@ -90,11 +90,11 @@ def register_target_layer2b(nws)
         support %w[target-L1 SV2]
       end
 
-      bdlink %w[SW1-BR p2 SW2-BR p2]
-      bdlink %w[SW1-BR p3 HYP1-vSW1-BR p1]
-      bdlink %w[SW2-BR p3 HYP1-vSW1-BR p2]
-      bdlink %w[HYP1-vSW1-BR p5 VM2 eth0.30]
-      bdlink %w[SW2-BR p6 SV2 eth0.30]
+      bdlink %w[SW1-BR-VL30 p2 SW2-BR-VL30 p2]
+      bdlink %w[SW1-BR-VL30 p1 HYP1-vSW1-BR-VL30 p1]
+      bdlink %w[SW2-BR-VL30 p1 HYP1-vSW1-BR-VL30 p2]
+      bdlink %w[SW2-BR-VL30 p3 SV2 eth0.30]
+      bdlink %w[HYP1-vSW1-BR-VL30 p3 VM2 eth0.30]
     end
   end
 end

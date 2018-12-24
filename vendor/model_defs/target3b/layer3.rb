@@ -53,18 +53,23 @@ def register_target_layer3(nws)
           prefixes: [seg_a_prefix],
           flags: %w[l3-segment pseudo-node]
         )
-        (1..2).each { |n| term_point "p#{n}" }
+        term_point 'p1' do
+          support %w[target-L2a R1-BR-VL10 p1]
+        end
+        term_point 'p2' do
+          support %w[target-L2a R2-BR-VL10 p1]
+        end
         term_point 'p3' do
-          support %w[target-L2a HYP1-vSW1-BR p3]
+          support %w[target-L2a HYP1-vSW1-BR-VL10 p3]
         end
         term_point 'p4' do
-          support %w[target-L2a SW2-BR p4]
+          support %w[target-L2a SW2-BR-VL10 p4]
         end
-        support %w[target-L2a R1-BR]
-        support %w[target-L2a R2-BR]
-        support %w[target-L2a SW1-BR]
-        support %w[target-L2a SW2-BR]
-        support %w[target-L2a HYP1-vSW1-BR]
+        support %w[target-L2a R1-BR-VL10]
+        support %w[target-L2a R2-BR-VL10]
+        support %w[target-L2a SW1-BR-VL10]
+        support %w[target-L2a SW2-BR-VL10]
+        support %w[target-L2a HYP1-vSW1-BR-VL10]
       end
 
       node 'Seg.B' do
@@ -72,18 +77,23 @@ def register_target_layer3(nws)
           prefixes: [seg_b_prefix],
           flags: %w[l3-segment pseudo-node]
         )
-        (1..2).each { |n| term_point "p#{n}" }
+        term_point 'p1' do
+          support %w[target-L2a R1-BR-VL10 p1]
+        end
+        term_point 'p2' do
+          support %w[target-L2a R2-BR-VL10 p1]
+        end
         term_point 'p3' do
-          support %w[target-L2a HYP1-vSW1-BR p3]
+          support %w[target-L2a HYP1-vSW1-BR-VL10 p4]
         end
         term_point 'p4' do
-          support %w[target-L2a SW2-BR p5]
+          support %w[target-L2a SW2-BR-VL10 p5]
         end
-        support %w[target-L2a R1-BR]
-        support %w[target-L2a R2-BR]
-        support %w[target-L2a SW1-BR]
-        support %w[target-L2a SW2-BR]
-        support %w[target-L2a HYP1-vSW1-BR]
+        support %w[target-L2a R1-BR-VL10]
+        support %w[target-L2a R2-BR-VL10]
+        support %w[target-L2a SW1-BR-VL10]
+        support %w[target-L2a SW2-BR-VL10]
+        support %w[target-L2a HYP1-vSW1-BR-VL10]
       end
 
       node 'Seg.C' do
@@ -92,14 +102,14 @@ def register_target_layer3(nws)
           flags: %w[l3-segment pseudo-node]
         )
         term_point 'p1' do
-          support %w[target-L2b HYP1-vSW1-BR p4]
+          support %w[target-L2b HYP1-vSW1-BR-VL30 p1]
         end
         term_point 'p2' do
-          support %w[target-L2b SW2-BR p6]
+          support %w[target-L2b SW2-BR-VL30 p3]
         end
-        support %w[target-L2b SW1-BR]
-        support %w[target-L2b SW2-BR]
-        support %w[target-L2b HYP1-vSW1-BR]
+        support %w[target-L2b SW1-BR-VL30]
+        support %w[target-L2b SW2-BR-VL30]
+        support %w[target-L2b HYP1-vSW1-BR-VL30]
       end
 
       node 'VM1' do
