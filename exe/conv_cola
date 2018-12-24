@@ -14,48 +14,67 @@ module Netomox
 
   data = JSON.parse(File.read(file))
   nws = Topology::Networks.new(data)
-  cola_data = {
+
+  # cola network data
+  cola_networks = {
     nodes: [],
     links: [],
     groups: []
   }
 
-  node_data_index = 0
-  node_data_index_of = {}
+  # create cola-node data
+  cola_node_index = 0
+  cola_node_index_of = {}
   nws.all_termination_points do |tp, _node, _nw|
-    node_data = {
+    cola_node = {
       name: tp.path,
-      index: node_data_index,
+      index: cola_node_index,
       width: 30,
       height: 20
     }
-    cola_data[:nodes].push node_data
-    node_data_index_of[tp.path] = node_data[:index]
-    node_data_index += 1
+    cola_networks[:nodes].push cola_node
+    cola_node_index_of[tp.path] = cola_node[:index]
+    cola_node_index += 1
   end
 
+  # create cola-link data by link
   nws.all_links do |link, _nw|
-    link_data = {
-      source: node_data_index_of[link.source.ref_path],
-      target: node_data_index_of[link.destination.ref_path]
+    cola_link = {
+      source: cola_node_index_of[link.source.ref_path],
+      target: cola_node_index_of[link.destination.ref_path]
     }
-    cola_data[:links].push link_data
+    cola_networks[:links].push cola_link
   end
 
-  group_as_host = {}
-  cola_data[:nodes].each do |nd|
-    node_path = nd[:name].split('/').slice(0..1).join('/')
-    unless group_as_host[node_path]
-      group_as_host[node_path] = []
+  # create cola-link data by supporting-tp
+  nws.all_termination_points do |tp, _node, _nw|
+    tp.supports.each do |stp|
+      cola_link = {
+        source: cola_node_index_of[tp.path],
+        target: cola_node_index_of[stp.ref_path]
+      }
+      cola_networks[:links].push cola_link
     end
-    group_as_host[node_path].push(nd[:index])
   end
-  group_as_host.each_value do |leaves|
+
+  # create cola groups (by each host)
+  cola_group_by_node = {}
+  cola_networks[:nodes].each do |cola_node|
+    # cola_node means tp
+    node_path = cola_node[:name].split('/').slice(0..1).join('/')
+    unless cola_group_by_node[node_path]
+      cola_group_by_node[node_path] = []
+    end
+    cola_group_by_node[node_path].push(cola_node[:index])
+  end
+
+  # construct cola group data
+  cola_group_by_node.each_value do |leaves|
     group_data = {
       leaves: leaves
     }
-    cola_data[:groups].push group_data
+    cola_networks[:groups].push group_data
   end
 
-  puts JSON.pretty_generate(cola_data)
+  puts JSON.pretty_generate(cola_networks)
 end
