@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+
+require 'json'
+require 'netomox'
+require 'optparse'
+
+module Netomox
+  params = ARGV.getopts('f:', 'file:')
+  file = params['f'] || params['file']
+  unless file
+    STDERR.puts 'file not specified'
+    exit(1)
+  end
+
+  data = JSON.parse(File.read(file))
+  nws = Topology::Networks.new(data)
+  cola_data = {
+    nodes: [],
+    links: [],
+    groups: []
+  }
+
+  node_data_index = 0
+  node_data_index_of = {}
+  nws.all_termination_points do |tp, _node, _nw|
+    node_data = {
+      name: tp.path,
+      index: node_data_index,
+      width: 30,
+      height: 20
+    }
+    cola_data[:nodes].push node_data
+    node_data_index_of[tp.path] = node_data[:index]
+    node_data_index += 1
+  end
+
+  nws.all_links do |link, _nw|
+    link_data = {
+      source: node_data_index_of[link.source.ref_path],
+      target: node_data_index_of[link.destination.ref_path]
+    }
+    cola_data[:links].push link_data
+  end
+
+  group_as_host = {}
+  cola_data[:nodes].each do |nd|
+    node_path = nd[:name].split('/').slice(0..1).join('/')
+    unless group_as_host[node_path]
+      group_as_host[node_path] = []
+    end
+    group_as_host[node_path].push(nd[:index])
+  end
+  group_as_host.each_value do |leaves|
+    group_data = {
+      leaves: leaves
+    }
+    cola_data[:groups].push group_data
+  end
+
+  puts JSON.pretty_generate(cola_data)
+end
