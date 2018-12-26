@@ -4,133 +4,171 @@ require 'json'
 require 'netomox'
 require 'optparse'
 
-module Netomox
-  params = ARGV.getopts('df:', 'file:', 'debug')
-  file = params['f'] || params['file']
-  debug = params['d'] || params['debug']
-  unless file
-    STDERR.puts 'file not specified'
-    exit(1)
+# cola network data
+# data for CoLa gridifiedSmallGroups
+# https://github.com/tgdwyer/WebCola/blob/master/WebCola/examples/gridifiedSmallGroups.html
+# https://github.com/tgdwyer/WebCola/blob/master/WebCola/examples/graphdata/smallgrouped.json
+class SmallGroupedNetwork
+  attr_accessor :nodes, :links, :groups
+
+  def initialize
+    @nodes = []
+    @links = []
+    @groups = []
   end
 
-  data = JSON.parse(File.read(file))
-  nws = Topology::Networks.new(data)
+  def to_data
+    {
+      nodes: @nodes,
+      links: @links,
+      groups: @groups
+    }
+  end
+end
 
-  # cola network data
-  cola_networks = {
-    nodes: [],
-    links: [],
-    groups: []
-  }
+# Topology to CoLa data converter
+class LayerNestedNetwork < SmallGroupedNetwork
+  def initialize(nws)
+    super()
+    @nws = nws # original network data
+    convert
+  end
+
+  private
+
+  def convert
+    # nodes
+    set_cola_nodes_from_tps
+    # links
+    set_cola_links_from_links
+    set_cola_links_from_stps
+    # groups
+    set_cola_groups
+  end
 
   # create cola-node data
-  cola_node_index = 0
-  cola_node_index_of = {}
-  nws.all_termination_points do |tp, _node, _nw|
-    cola_node = {
-      name: tp.path,
-      index: cola_node_index,
-      width: 30,
-      height: 20
-    }
-    cola_networks[:nodes].push cola_node
-    cola_node_index_of[tp.path] = cola_node[:index]
-    cola_node_index += 1
+  def set_cola_nodes_from_tps
+    cola_node_index = 0
+    @cola_node_index_of = {} # index dictionary of ColaNodes
+    @nws.all_termination_points do |tp, _node, _nw|
+      cola_node = {
+        name: tp.path,
+        index: cola_node_index,
+        width: 30,
+        height: 20
+      }
+      cola_node_index += 1
+      @cola_node_index_of[tp.path] = cola_node[:index]
+      @nodes.push cola_node
+    end
   end
 
+
   # create cola-link data by link
-  nws.all_links do |link, _nw|
-    cola_link = {
-      source: cola_node_index_of[link.source.ref_path],
-      target: cola_node_index_of[link.destination.ref_path]
-    }
-    cola_networks[:links].push cola_link
+  def set_cola_links_from_links
+    @nws.all_links do |link, _nw|
+      cola_link = {
+        source: @cola_node_index_of[link.source.ref_path],
+        target: @cola_node_index_of[link.destination.ref_path]
+      }
+      @links.push cola_link
+    end
   end
 
   # create cola-link data by supporting-tp
-  nws.all_termination_points do |tp, _node, _nw|
-    tp.supports.each do |stp|
-      cola_link = {
-        source: cola_node_index_of[tp.path],
-        target: cola_node_index_of[stp.ref_path]
-      }
-      cola_networks[:links].push cola_link
+  def set_cola_links_from_stps
+    @nws.all_termination_points do |tp, _node, _nw|
+      tp.supports.each do |stp|
+        cola_link = {
+          source: @cola_node_index_of[tp.path],
+          target: @cola_node_index_of[stp.ref_path]
+        }
+        @links.push cola_link
+      end
     end
   end
 
   # create cola groups (by each host, term points are leaves)
-  cola_group_index = 0
-  cola_group_index_of = {}
-  cola_networks[:nodes].each do |cola_node|
-    # cola_node means tp
-    node_path = cola_node[:name].split('/').slice(0..1).join('/')
-    unless cola_group_index_of[node_path]
-      cola_group_index_of[node_path] = {
-        index: cola_group_index,
-        leaves: []
-      }
-      cola_group_index += 1
+  def make_group_index_table
+    cola_group_index = 0
+    @cola_group_index_of = {}
+    @nodes.each do |cola_node|
+      # cola_node means tp
+      node_path = cola_node[:name].split('/').slice(0..1).join('/')
+      unless @cola_group_index_of[node_path]
+        @cola_group_index_of[node_path] = {
+          index: cola_group_index,
+          leaves: []
+        }
+        cola_group_index += 1
+      end
+      @cola_group_index_of[node_path][:leaves].push(cola_node[:index])
     end
-    cola_group_index_of[node_path][:leaves].push(cola_node[:index])
-  end
-  if debug
-    puts '## cola group index'
-    puts JSON.pretty_generate(cola_group_index_of)
   end
 
   # create cola groups (by supporting node)
-  parent_nodes_of = {}
-  nws.all_nodes do |node, _nw|
-    node.supports.each do |snode|
-      snode_path = snode.ref_path
-      unless parent_nodes_of[snode_path]
-        parent_nodes_of[snode_path] = []
+  def make_parent_node_table
+    @parent_nodes_of = {}
+    @nws.all_nodes do |node, _nw|
+      node.supports.each do |snode|
+        snode_path = snode.ref_path
+        unless @parent_nodes_of[snode_path]
+          @parent_nodes_of[snode_path] = []
+        end
+        @parent_nodes_of[snode_path].push node.path
       end
-      parent_nodes_of[snode_path].push node.path
     end
-  end
-  if debug
-    puts '## cola parent node table'
-    puts JSON.pretty_generate(parent_nodes_of)
   end
 
   # check reference count
-  ref_count = {}
-  parent_nodes_of.each_value do |parents|
-    parents.each do |parent_path|
-      ref_count[parent_path] = 0 unless ref_count[parent_path]
-      ref_count[parent_path] += 1
+  def find_multi_ref_nodes
+    ref_count = {}
+    @parent_nodes_of.each_value do |parents|
+      parents.each do |parent_path|
+        ref_count[parent_path] = 0 unless ref_count[parent_path]
+        ref_count[parent_path] += 1
+      end
     end
-  end
-  multi_ref_nodes = ref_count.select {|_k,v| v > 1}.keys
-  if debug
-    puts '## ref_count'
-    puts JSON.pretty_generate(multi_ref_nodes)
+    ref_count.select {|_k,v| v > 1}.keys
   end
 
   # construct cola group data
-  cola_group_index_of.each_pair do |node_path, group|
-    puts "#{node_path}, #{group}, #{parent_node_of[node_path]}" if debug
-    group_data = {
-      index: group[:index],
-      leaves: group[:leaves]
-    }
-    unless parent_nodes_of[node_path]
-      cola_networks[:groups].push group_data
-      next
-    end
-    parents = parent_nodes_of[node_path] - multi_ref_nodes
-    puts "# #{node_path}, parents:#{parent_nodes_of[node_path]} - #{multi_ref_nodes} = #{parents}" if debug
-    unless parents.empty?
-      group_data[:groups] = parents.map do |parent_path|
-        cola_group_index_of[parent_path][:index]
+  def set_cola_groups
+    make_group_index_table
+    make_parent_node_table
+    multi_ref_nodes = find_multi_ref_nodes
+    @cola_group_index_of.each_pair do |node_path, group|
+      group_data = {
+        index: group[:index],
+        leaves: group[:leaves]
+      }
+      unless @parent_nodes_of[node_path]
+        @groups.push group_data
+        next
       end
+      parents = @parent_nodes_of[node_path] - multi_ref_nodes
+      unless parents.empty?
+        group_data[:groups] = parents.map do |parent_path|
+          @cola_group_index_of[parent_path][:index]
+        end
+      end
+      @groups.push group_data
     end
-    cola_networks[:groups].push group_data
   end
-
-  # output json data for CoLa gridifiedSmallGroups
-  # https://github.com/tgdwyer/WebCola/blob/master/WebCola/examples/gridifiedSmallGroups.html
-  # https://github.com/tgdwyer/WebCola/blob/master/WebCola/examples/graphdata/smallgrouped.json
-  puts JSON.pretty_generate(cola_networks)
 end
+
+# parse options
+params = ARGV.getopts('df:', 'file:')
+file = params['f'] || params['file']
+unless file
+  STDERR.puts 'file not specified'
+  exit(1)
+end
+
+# read topology data (json)
+data = JSON.parse(File.read(file))
+
+# convert data
+nws = Netomox::Topology::Networks.new(data)
+cola_networks = LayerNestedNetwork.new(nws)
+puts JSON.pretty_generate(cola_networks.to_data)
