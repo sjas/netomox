@@ -15,6 +15,10 @@ class SmallGroupedNetwork
     @nodes = []
     @links = []
     @groups = []
+    @cola_node_index = 0
+    @cola_node_index_of = {} # index dictionary of ColaNode
+    @cola_group_index = 0
+    @cola_group_index_of = {} # index dictionary of ColaGroup
   end
 
   def to_data
@@ -24,9 +28,107 @@ class SmallGroupedNetwork
       groups: @groups
     }
   end
+
+  protected
+
+  def make_cola_node(name)
+    {
+      name: name,
+      index: @cola_node_index,
+      width: 30,
+      height: 20
+    }
+  end
+
+  def append_cola_node(name)
+    cola_node = make_cola_node(name)
+    @nodes.push cola_node
+    @cola_node_index_of[name] = cola_node[:index]
+    @cola_node_index += 1
+  end
+
+  def make_cola_link(source, target)
+    {
+      source: @cola_node_index_of[source],
+      target: @cola_node_index_of[target]
+    }
+  end
+
+  def append_cola_link(source, target)
+    cola_link = make_cola_link(source, target)
+    @links.push cola_link
+  end
+
+  def append_cola_group_table(group_name, leaf)
+    unless @cola_group_index_of[group_name]
+      @cola_group_index_of[group_name] = {
+        index: @cola_group_index,
+        leaves: []
+      }
+      @cola_group_index += 1
+    end
+    @cola_group_index_of[group_name][:leaves].push(leaf)
+  end
+
+  def make_cola_group(index, leaves)
+    {
+      index: index,
+      leaves: leaves
+    }
+  end
 end
 
 # Topology to CoLa data converter
+# to visualize support-node-reference
+class SupportNodeNetwork < SmallGroupedNetwork
+  def initialize(nws)
+    super()
+    @nws = nws # original network data
+    convert
+  end
+
+  private
+
+  def convert
+    set_cola_nodes_from_nodes
+    set_cola_links_from_snodes
+    set_cola_groups
+  end
+
+  # create cola-node data from nodes
+  def set_cola_nodes_from_nodes
+    @nws.all_nodes do |node, _nw|
+      append_cola_node(node.path)
+    end
+  end
+
+  # create cola-link data by supporting-node
+  def set_cola_links_from_snodes
+    @nws.all_nodes do |node, _nw|
+      node.supports.each do |snode|
+        append_cola_link(node.path, snode.ref_path)
+      end
+    end
+  end
+
+  def make_group_index_table
+    @nodes.each do |cola_node|
+      nw_path = cola_node[:name].split('/')[0]
+      append_cola_group_table(nw_path, cola_node[:index])
+    end
+  end
+
+  def set_cola_groups
+    make_group_index_table
+    @cola_group_index_of.each_pair do |_nw_path, group|
+      group_data = make_cola_group(group[:index], group[:leaves])
+      @groups.push group_data
+    end
+  end
+end
+
+# Topology to CoLa data converter
+# to visualize node/tp hierarchy as nest
 class LayerNestedNetwork < SmallGroupedNetwork
   def initialize(nws)
     super()
@@ -46,32 +148,17 @@ class LayerNestedNetwork < SmallGroupedNetwork
     set_cola_groups
   end
 
-  # create cola-node data
+  # create cola-node data from term points
   def set_cola_nodes_from_tps
-    cola_node_index = 0
-    @cola_node_index_of = {} # index dictionary of ColaNodes
     @nws.all_termination_points do |tp, _node, _nw|
-      cola_node = {
-        name: tp.path,
-        index: cola_node_index,
-        width: 30,
-        height: 20
-      }
-      cola_node_index += 1
-      @cola_node_index_of[tp.path] = cola_node[:index]
-      @nodes.push cola_node
+      append_cola_node(tp.path)
     end
   end
-
 
   # create cola-link data by link
   def set_cola_links_from_links
     @nws.all_links do |link, _nw|
-      cola_link = {
-        source: @cola_node_index_of[link.source.ref_path],
-        target: @cola_node_index_of[link.destination.ref_path]
-      }
-      @links.push cola_link
+      append_cola_link(link.source.ref_path, link.destination.ref_path)
     end
   end
 
@@ -79,30 +166,18 @@ class LayerNestedNetwork < SmallGroupedNetwork
   def set_cola_links_from_stps
     @nws.all_termination_points do |tp, _node, _nw|
       tp.supports.each do |stp|
-        cola_link = {
-          source: @cola_node_index_of[tp.path],
-          target: @cola_node_index_of[stp.ref_path]
-        }
-        @links.push cola_link
+        append_cola_link(tp.path, stp.ref_path)
       end
     end
   end
 
   # create cola groups (by each host, term points are leaves)
   def make_group_index_table
-    cola_group_index = 0
-    @cola_group_index_of = {}
     @nodes.each do |cola_node|
       # cola_node means tp
+      # node_path means node.path of parent of tp
       node_path = cola_node[:name].split('/').slice(0..1).join('/')
-      unless @cola_group_index_of[node_path]
-        @cola_group_index_of[node_path] = {
-          index: cola_group_index,
-          leaves: []
-        }
-        cola_group_index += 1
-      end
-      @cola_group_index_of[node_path][:leaves].push(cola_node[:index])
+      append_cola_group_table(node_path, cola_node[:index])
     end
   end
 
@@ -138,10 +213,7 @@ class LayerNestedNetwork < SmallGroupedNetwork
     make_parent_node_table
     multi_ref_nodes = find_multi_ref_nodes
     @cola_group_index_of.each_pair do |node_path, group|
-      group_data = {
-        index: group[:index],
-        leaves: group[:leaves]
-      }
+      group_data = make_cola_group(group[:index], group[:leaves])
       unless @parent_nodes_of[node_path]
         @groups.push group_data
         next
@@ -158,17 +230,22 @@ class LayerNestedNetwork < SmallGroupedNetwork
 end
 
 # parse options
-params = ARGV.getopts('df:', 'file:')
+params = ARGV.getopts('12df:', 'file:')
+
+# read topology data (json)
 file = params['f'] || params['file']
 unless file
   STDERR.puts 'file not specified'
   exit(1)
 end
-
-# read topology data (json)
 data = JSON.parse(File.read(file))
-
-# convert data
 nws = Netomox::Topology::Networks.new(data)
-cola_networks = LayerNestedNetwork.new(nws)
+
+# convert data (option:[12] specify a kind of converter)
+cola_networks = if params['2']
+                  SupportNodeNetwork.new(nws)
+                else
+                  # opt:1 (default)
+                  LayerNestedNetwork.new(nws)
+                end
 puts JSON.pretty_generate(cola_networks.to_data)
